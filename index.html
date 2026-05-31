@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobilia - Dashboard Inmobiliario</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; min-height: 100vh; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 15px; padding: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
+        header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #eee; }
+        header h1 { color: #2c3e50; font-size: 2em; }
+        header p { color: #7f8c8d; margin-top: 5px; }
+        .upload-form { background: #f8f9fa; padding: 25px; border-radius: 10px; margin-bottom: 30px; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; transition: border-color 0.3s; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #667eea; }
+        .btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; transition: transform 0.2s; width: 100%; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4); }
+        .btn:disabled { background: #bdc3c7; cursor: not-allowed; transform: none; }
+        .btn-export { background: #27ae60; margin-right: 10px; }
+        .btn-export.pdf { background: #e74c3c; }
+        .loading { display: none; text-align: center; padding: 20px; color: #667eea; font-weight: 600; }
+        .loading.active { display: block; }
+        .no-results { display: none; text-align: center; padding: 30px; background: #fff3cd; border-radius: 10px; margin: 20px 0; color: #856404; }
+        .no-results.active { display: block; }
+        .results-section { margin-top: 30px; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 25px; }
+        .stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px; text-align: center; }
+        .stat-card h3 { font-size: 2em; margin-bottom: 5px; }
+        .stat-card p { opacity: 0.9; font-size: 0.9em; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th { background: #2c3e50; color: white; padding: 12px; text-align: left; font-weight: 600; }
+        td { padding: 12px; border-bottom: 1px solid #eee; }
+        tr:hover { background: #f8f9fa; }
+        .checkbox-cell { width: 40px; text-align: center; }
+        .actions { display: flex; gap: 10px; margin: 20px 0; flex-wrap: wrap; }
+        .export-disabled { color: #e74c3c; font-size: 0.9em; margin-left: 10px; }
+        @media (max-width: 768px) {
+            .form-grid { grid-template-columns: 1fr; }
+            .actions { flex-direction: column; }
+            .btn-export { margin-right: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏢 Mobilia</h1>
+            <p>Análisis Inteligente de Conversaciones de WhatsApp</p>
+        </header>
+
+        <form id="uploadForm" class="upload-form" enctype="multipart/form-data">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="file">📥 Archivo .txt de WhatsApp</label>
+                    <input type="file" id="file" name="file" accept=".txt" required>
+                </div>
+                <div class="form-group">
+                    <label for="fecha_inicio">📅 Fecha desde</label>
+                    <input type="date" id="fecha_inicio" name="fecha_inicio">
+                </div>
+                <div class="form-group">
+                    <label for="fecha_fin">📅 Fecha hasta</label>
+                    <input type="date" id="fecha_fin" name="fecha_fin">
+                </div>
+                <div class="form-group">
+                    <label for="tipo_inmueble">🏷️ Tipo de Inmueble</label>
+                    <select id="tipo_inmueble" name="tipo_inmueble">
+                        <option value="">🌐 Todos</option>
+                        <option value="Casa">🏠 Casa</option>
+                        <option value="Apartamento">🏢 Apartamento</option>
+                        <option value="Local/Oficina">🏪 Local / Oficina</option>
+                        <option value="Terreno">🌳 Terreno / Finca</option>
+                        <option value="Galpón">🏭 Galpón / Bodega</option>
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="btn" id="processBtn">🚀 Procesar Consulta</button>
+        </form>
+
+        <div id="loading" class="loading">
+            ⏳ Analizando conversación... Por favor espera.
+        </div>
+
+        <div id="noResults" class="no-results">
+            🔍 No se encontraron requerimientos con los filtros seleccionados.<br>
+            <small>Intenta ajustar las fechas o quitar el filtro de tipo de inmueble.</small>
+        </div>
+
+        <div id="results" class="results-section" style="display: none;">
+            <div class="stats" id="statsContainer"></div>
+            
+            <div class="actions">
+                <button onclick="exportData('excel')" class="btn btn-export">📊 Descargar Excel</button>
+                <button onclick="exportData('pdf')" class="btn btn-export pdf">📄 Descargar PDF</button>
+                <span id="exportWarning" class="export-disabled" style="display: none;">
+                    ⚠️ Exportación temporalmente desactivada
+                </span>
+            </div>
+
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="checkbox-cell"><input type="checkbox" id="selectAll"></th>
+                            <th>Fecha</th>
+                            <th>Tipo</th>
+                            <th>Requerimiento</th>
+                            <th>Contacto</th>
+                            <th>Teléfono</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('uploadForm');
+        const loading = document.getElementById('loading');
+        const noResults = document.getElementById('noResults');
+        const results = document.getElementById('results');
+        const tableBody = document.getElementById('tableBody');
+        const statsContainer = document.getElementById('statsContainer');
+        const selectAll = document.getElementById('selectAll');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            loading.classList.add('active');
+            noResults.classList.remove('active');
+            results.style.display = 'none';
+            
+            const formData = new FormData(form);
+            
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert('❌ Error: ' + data.error);
+                    return;
+                }
+                
+                renderResults(data);
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Error de conexión con el servidor');
+            } finally {
+                loading.classList.remove('active');
+            }
+        });
+
+        function renderResults(data) {
+            // Renderizar estadísticas
+            statsContainer.innerHTML = '';
+            for (const [tipo, cantidad] of Object.entries(data.estadisticas)) {
+                statsContainer.innerHTML += `
+                    <div class="stat-card">
+                        <h3>${cantidad}</h3>
+                        <p>${tipo}</p>
+                    </div>
+                `;
+            }
+            
+            // Renderizar tabla
+            tableBody.innerHTML = '';
+            if (data.tabla.length === 0) {
+                noResults.classList.add('active');
+                return;
+            }
+            
+            data.tabla.forEach((row, index) => {
+                const phone = row.telefono !== 'No especificado' ? `📞 ${row.telefono}` : '-';
+                tableBody.innerHTML += `
+                    <tr>
+                        <td class="checkbox-cell"><input type="checkbox" class="row-checkbox" data-index="${index}"></td>
+                        <td>${row.fecha}</td>
+                        <td>${row.tipo_inmueble}</td>
+                        <td>${row.requerimiento}</td>
+                        <td>${row.contacto}</td>
+                        <td>${phone}</td>
+                    </tr>
+                `;
+            });
+            
+            results.style.display = 'block';
+        }
+
+        // Select all checkbox
+        selectAll.addEventListener('change', (e) => {
+            document.querySelectorAll('.row-checkbox').forEach(cb => {
+                cb.checked = e.target.checked;
+            });
+        });
+
+        // Export functions
+        async function exportData(format) {
+            try {
+                const response = await fetch(`/export/${format}`);
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `requerimientos_mobilia.${format === 'excel' ? 'xlsx' : 'pdf'}`;
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                } else {
+                    const error = await response.json();
+                    alert('⚠️ ' + error.error);
+                }
+            } catch (error) {
+                console.error('Export error:', error);
+                alert('❌ Error al exportar');
+            }
+        }
+    </script>
+</body>
+</html>
