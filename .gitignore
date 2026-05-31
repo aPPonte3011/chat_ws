@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+venv/
+.venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs y datos temporales
+*.log
+*.xlsx
+*.pdf
+*.txt
+!requirements.txt
+
+# Variables de entorno
+.env
+*.env
+
+# Render
+/render-logs/
