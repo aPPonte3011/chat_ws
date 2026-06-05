@@ -1,1 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Integral RQ Inmobiliario</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        .stat-btn { cursor: pointer; transition: all 0.2s; }
+        .stat-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .stat-btn.active { background-color: #0d6efd !important; color: white !important; border-color: #0d6efd !important; }
+        .loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; }
+        .contactar-badge { transition: all 0.3s ease; }
+        .contactar-badge:hover { background-color: #157347 !important; transform: scale(1.05); }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2 fw-bold">⏳ Analizando conversación... Por favor espera.</p>
+    </div>
 
+    <div class="container py-4">
+        <h2 class="text-center mb-4">🏢 INTEGRAL RQ - Análisis de WhatsApp</h2>
+        
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <form id="uploadForm" enctype="multipart/form-data">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">📥 Archivo .txt de WhatsApp</label>
+                            <input type="file" class="form-control" name="file" accept=".txt" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold">📅 Fecha desde</label>
+                            <input type="date" class="form-control" name="fecha_inicio">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold">📅 Fecha hasta</label>
+                            <input type="date" class="form-control" name="fecha_fin">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold">🏷️ Tipo de Inmueble</label>
+                            <select class="form-select" name="tipo_inmueble">
+                                <option value="">🌐 Todos</option>
+                                <option value="Casa">🏠 Casa</option>
+                                <option value="Apartamento">🏢 Apartamento</option>
+                                <option value="Local/Oficina">🏪 Local / Oficina</option>
+                                <option value="Terreno">🌳 Terreno / Finca</option>
+                                <option value="Galpón">🏭 Galpón / Bodega</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100 fw-bold">🚀 Procesar</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="resultsSection" style="display: none;">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">📊 Estadísticas de Requerimientos</h5>
+                    <small class="text-muted">💡 Haz clic en un tipo de inmueble para filtrar la tabla inmediatamente</small>
+                </div>
+                <div class="card-body">
+                    <div id="statsContainer" class="d-flex flex-wrap gap-2"></div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">📋 Detalle de Requerimientos</h5>
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-secondary btn-sm" disabled title="Función temporalmente desactivada">📊 Descargar Excel</button>
+                        <button type="button" class="btn btn-secondary btn-sm" disabled title="Función temporalmente desactivada">📄 Descargar PDF</button>
+                        <span class="badge bg-warning text-dark">⚠️ Función Temporalmente desactivada</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="noResultsMsg" class="alert alert-warning" style="display: none;">
+                        🔍 No se encontraron requerimientos con los filtros seleccionados.
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover table-bordered align-middle" id="resultsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 40px;"><input type="checkbox" id="selectAll"></th>
+                                    <th>Fecha</th>
+                                    <th>Tipo</th>
+                                    <th>Requerimiento</th>
+                                    <th>Contacto</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let allData = [];
+
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            document.getElementById('loadingOverlay').style.display = 'flex';
+            document.getElementById('resultsSection').style.display = 'none';
+
+            const formData = new FormData(this);
+            try {
+                const response = await fetch('/upload', { method: 'POST', body: formData });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    allData = data.tabla || [];
+                    renderStats(data.estadisticas || {});
+                    renderTable(allData);
+                    document.getElementById('resultsSection').style.display = 'block';
+                } else {
+                    alert('Error: ' + (data.error || 'Error desconocido'));
+                }
+            } catch (error) {
+                console.error(error);
+                alert('Error al procesar el archivo.');
+            } finally {
+                document.getElementById('loadingOverlay').style.display = 'none';
+            }
+        });
+
+        function renderStats(estadisticas) {
+            const container = document.getElementById('statsContainer');
+            container.innerHTML = '';
+            const total = Object.values(estadisticas).reduce((a, b) => a + b, 0);
+            container.appendChild(createStatBtn('🌐 Todos', total, 'Todos', true));
+
+            const icons = { 'Casa': '🏠', 'Apartamento': '🏢', 'Local/Oficina': '🏪', 'Terreno': '🌳', 'Galpón': '🏭', 'Otro': '❓' };
+            for (const [tipo, cantidad] of Object.entries(estadisticas)) {
+                container.appendChild(createStatBtn(`${icons[tipo] || '📦'} ${tipo}`, cantidad, tipo, false));
+            }
+        }
+
+        function createStatBtn(label, count, tipo, isActive) {
+            const btn = document.createElement('button');
+            btn.className = `btn btn-outline-primary stat-btn ${isActive ? 'active' : ''}`;
+            btn.innerHTML = `<strong>${label}</strong> <span class="badge bg-secondary ms-1">${count}</span>`;
+            btn.onclick = () => filterTable(tipo, btn);
+            return btn;
+        }
+
+        function filterTable(tipo, clickedBtn) {
+            document.querySelectorAll('.stat-btn').forEach(btn => btn.classList.remove('active'));
+            clickedBtn.classList.add('active');
+            renderTable(tipo === 'Todos' ? allData : allData.filter(row => row.tipo_inmueble === tipo));
+        }
+
+        function getBadgeClass(tipo) {
+            const map = { 'Casa': 'bg-success', 'Apartamento': 'bg-primary', 'Local/Oficina': 'bg-warning text-dark', 'Terreno': 'bg-info text-dark', 'Galpón': 'bg-danger', 'Otro': 'bg-secondary' };
+            return map[tipo] || 'bg-secondary';
+        }
+
+        function toggleContactar(checkbox) {
+            const row = checkbox.closest('tr');
+            if (!row) return;
+            const badge = row.querySelector('.contactar-badge');
+            if (!badge) return;
+
+            if (checkbox.checked) {
+                badge.style.setProperty('display', 'inline-flex', 'important');
+            } else {
+                badge.style.setProperty('display', 'none', 'important');
+            }
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('tableBody');
+            const noResultsMsg = document.getElementById('noResultsMsg');
+            tbody.innerHTML = '';
+
+            if (data.length === 0) {
+                noResultsMsg.style.display = 'block';
+                return;
+            }
+            noResultsMsg.style.display = 'none';
+
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><input type="checkbox" class="row-checkbox" onchange="toggleContactar(this)"></td>
+                    <td>${row.fecha}</td>
+                    <td><span class="badge ${getBadgeClass(row.tipo_inmueble)}">${row.tipo_inmueble}</span></td>
+                    <td>${row.requerimiento}</td>
+                    <td>${row.contacto}</td>
+                    <td>
+                        <span class="badge bg-success contactar-badge d-inline-flex align-items-center gap-1" style="display: none !important; cursor: pointer;" onclick="alert('📞 Iniciando proceso de contacto con: ${row.contacto}')">
+                            <i class="bi bi-telephone-fill"></i> Contactar
+                        </span>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        document.getElementById('selectAll').addEventListener('change', function() {
+            document.querySelectorAll('.row-checkbox').forEach(cb => {
+                cb.checked = this.checked;
+                toggleContactar(cb);
+            });
+        });
+    </script>
+</body>
+</html>
